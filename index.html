@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>scrolling-video test</title>
+  <style>
+    *, *::before, *::after { margin: 0; box-sizing: border-box; }
+    body { font-family: system-ui, -apple-system, sans-serif; }
+    .spacer { height: 50vh; display: grid; place-items: center; color: #999; font-size: 1.1rem; }
+
+    /* ── Editor panel ── */
+    #editor {
+      position: fixed;
+      top: 0;
+      right: 0;
+      width: 320px;
+      height: 100vh;
+      background: #111;
+      color: #ddd;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      box-shadow: -2px 0 20px rgba(0,0,0,.5);
+      transition: transform .25s ease;
+      overflow: hidden;
+    }
+    #editor.collapsed { transform: translateX(100%); }
+
+    #editor-toggle {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      z-index: 10000;
+      background: rgba(0,0,0,.6);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      color: #fff;
+      border: 1px solid rgba(255,255,255,.15);
+      padding: 7px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      font: 13px/1 system-ui, sans-serif;
+      transition: background .15s;
+    }
+    #editor-toggle:hover { background: rgba(0,0,0,.8); }
+
+    /* Header */
+    .editor-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid #222;
+      flex-shrink: 0;
+    }
+    .editor-header h2 {
+      font-size: 15px;
+      font-weight: 600;
+      margin: 0;
+    }
+
+    /* Scrollable body */
+    .editor-body {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+    .editor-body::-webkit-scrollbar { width: 6px; }
+    .editor-body::-webkit-scrollbar-track { background: transparent; }
+    .editor-body::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+
+    /* Collapsible sections */
+    .section { border-bottom: 1px solid #1e1e1e; }
+    .section-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      padding: 10px 16px;
+      background: none;
+      border: none;
+      color: #888;
+      font: 11px/1 system-ui, sans-serif;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      cursor: pointer;
+      user-select: none;
+    }
+    .section-toggle:hover { color: #bbb; }
+    .section-toggle::after {
+      content: '';
+      flex-shrink: 0;
+      width: 0; height: 0;
+      border-left: 4px solid transparent;
+      border-right: 4px solid transparent;
+      border-top: 5px solid currentColor;
+      transition: transform .2s;
+    }
+    .section.closed .section-toggle::after { transform: rotate(-90deg); }
+    .section.closed .section-body { display: none; }
+    .section-body { padding: 4px 16px 12px; }
+
+    /* ── Field rows ── */
+    .field {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 6px;
+    }
+    .field > label {
+      flex: 0 0 64px;
+      font-size: 11px;
+      color: #777;
+      text-align: right;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .field-input {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+    }
+    .field-input input,
+    .field-input select {
+      width: 100%;
+      background: #1a1a1a;
+      border: 1px solid #333;
+      color: #eee;
+      padding: 5px 8px;
+      border-radius: 4px;
+      font: 12px/1.4 system-ui, sans-serif;
+      transition: border-color .15s;
+    }
+    .field-input input:focus,
+    .field-input select:focus {
+      outline: none;
+      border-color: #6af;
+    }
+    .field-input input[type="file"] {
+      font-size: 11px;
+      padding: 3px;
+    }
+    .field-input input[type="file"]::file-selector-button {
+      background: #2a2a2a;
+      color: #ddd;
+      border: 1px solid #444;
+      border-radius: 3px;
+      padding: 2px 6px;
+      font-size: 11px;
+      cursor: pointer;
+      margin-right: 4px;
+    }
+
+    /* Slider + text combo */
+    .slider-combo {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      overflow: hidden;
+    }
+    .slider-combo input[type="range"] {
+      flex: 1;
+      min-width: 0;
+      height: 4px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: #333;
+      border-radius: 2px;
+      outline: none;
+    }
+    .slider-combo input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      background: #6af;
+      cursor: pointer;
+      border: none;
+    }
+    .slider-combo input[type="range"]::-moz-range-thumb {
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      background: #6af;
+      cursor: pointer;
+      border: none;
+    }
+    .slider-combo input[type="text"] {
+      width: 52px;
+      flex: 0 0 52px;
+      background: #1a1a1a;
+      border: 1px solid #333;
+      color: #eee;
+      padding: 3px 4px;
+      border-radius: 4px;
+      font: 11px/1.4 monospace;
+      text-align: right;
+    }
+    .slider-combo input[type="text"]:focus {
+      outline: none;
+      border-color: #6af;
+    }
+
+    /* Color picker + text */
+    .color-combo {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      overflow: hidden;
+    }
+    .color-combo input[type="color"] {
+      width: 28px; height: 24px;
+      flex: 0 0 28px;
+      padding: 1px;
+      cursor: pointer;
+      border-radius: 4px;
+      background: #1a1a1a;
+      border: 1px solid #333;
+    }
+    .color-combo input[type="text"] {
+      flex: 1;
+      min-width: 0;
+      background: #1a1a1a;
+      border: 1px solid #333;
+      color: #eee;
+      padding: 5px 8px;
+      border-radius: 4px;
+      font: 12px/1.4 system-ui, sans-serif;
+    }
+    .color-combo input[type="text"]:focus {
+      outline: none;
+      border-color: #6af;
+    }
+
+    /* Checkbox field */
+    .check-field {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 6px;
+    }
+    .check-field input[type="checkbox"] {
+      accent-color: #6af;
+      flex-shrink: 0;
+    }
+    .check-field label {
+      font-size: 12px;
+      color: #aaa;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    /* ── Text overlay cards ── */
+    .overlay-card {
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 6px;
+      padding: 8px;
+      margin-top: 8px;
+    }
+    .overlay-card:hover { border-color: #333; }
+    .overlay-top {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 6px;
+    }
+    .overlay-top .ts-label {
+      font-size: 10px;
+      color: #666;
+      text-transform: uppercase;
+      flex-shrink: 0;
+    }
+    .overlay-top input {
+      width: 64px;
+      flex: 0 0 64px;
+      background: #222;
+      border: 1px solid #333;
+      color: #6af;
+      padding: 4px 6px;
+      border-radius: 3px;
+      font: 12px/1 monospace;
+      text-align: center;
+    }
+    .overlay-top input:focus { outline: none; border-color: #6af; }
+    .overlay-delete {
+      margin-left: auto;
+      background: none;
+      border: none;
+      color: #555;
+      font-size: 18px;
+      cursor: pointer;
+      padding: 0 2px;
+      line-height: 1;
+      flex-shrink: 0;
+      transition: color .15s;
+    }
+    .overlay-delete:hover { color: #e55; }
+    .overlay-card textarea {
+      display: block;
+      width: 100%;
+      background: #222;
+      border: 1px solid #333;
+      color: #eee;
+      padding: 6px 8px;
+      border-radius: 4px;
+      font: 13px/1.4 system-ui, sans-serif;
+      resize: vertical;
+      min-height: 36px;
+    }
+    .overlay-card textarea:focus { outline: none; border-color: #6af; }
+
+    #add-overlay {
+      display: block;
+      width: 100%;
+      margin-top: 10px;
+      padding: 7px 0;
+      background: #1a1a1a;
+      color: #6af;
+      border: 1px dashed #333;
+      border-radius: 6px;
+      cursor: pointer;
+      font: 12px/1 system-ui, sans-serif;
+      transition: background .15s, border-color .15s;
+    }
+    #add-overlay:hover { background: #1e1e1e; border-color: #6af; }
+
+    /* ── Footer ── */
+    .editor-footer {
+      flex-shrink: 0;
+      padding: 12px 16px;
+      border-top: 1px solid #222;
+      overflow: hidden;
+    }
+    #export-btn {
+      display: block;
+      width: 100%;
+      padding: 8px 0;
+      background: #1a3a5c;
+      color: #8cf;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font: 12px/1 system-ui, sans-serif;
+      font-weight: 500;
+      transition: background .15s;
+    }
+    #export-btn:hover { background: #244a6e; }
+    #export-btn.copied { background: #1a4a2a; color: #8fa; }
+
+    #export-output {
+      margin-top: 10px;
+      padding: 8px;
+      background: #0a0a0a;
+      border: 1px solid #222;
+      border-radius: 4px;
+      font: 11px/1.5 monospace;
+      color: #8fa;
+      white-space: pre-wrap;
+      word-break: break-all;
+      max-height: 180px;
+      overflow-y: auto;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="spacer">Scroll down</div>
+
+  <scrolling-video id="sv" src="/videos/video.mp4" debug>
+    <p data-timestamp="0:02">First overlay at 2 seconds</p>
+    <p data-timestamp="0:06">Second overlay at 6 seconds</p>
+    <p data-timestamp="0:10">Third overlay at 10 seconds</p>
+  </scrolling-video>
+
+  <div class="spacer">End</div>
+
+  <button id="editor-toggle">Editor</button>
+
+  <form id="editor" autocomplete="off">
+    <div class="editor-header">
+      <h2>Scrolling Video Editor</h2>
+    </div>
+
+    <div class="editor-body">
+
+      <!-- Video source -->
+      <div class="section">
+        <button type="button" class="section-toggle">Video source</button>
+        <div class="section-body">
+          <div class="field">
+            <label>File</label>
+            <div class="field-input">
+              <input type="file" id="video-upload" accept="video/*">
+            </div>
+          </div>
+          <div class="field">
+            <label>URL</label>
+            <div class="field-input">
+              <input type="text" id="video-url" value="video.mp4" placeholder="video.mp4">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Text overlays -->
+      <div class="section">
+        <button type="button" class="section-toggle">Text overlays</button>
+        <div class="section-body">
+          <div id="overlays"></div>
+          <button type="button" id="add-overlay">+ Add text overlay</button>
+        </div>
+      </div>
+
+      <!-- Text styling -->
+      <div class="section">
+        <button type="button" class="section-toggle">Text styling</button>
+        <div class="section-body">
+          <div class="field">
+            <label>Font</label>
+            <div class="field-input">
+              <select data-var="--scrolling-video-text-font-family">
+                <option value="sans-serif" selected>sans-serif</option>
+                <option value="serif">serif</option>
+                <option value="monospace">monospace</option>
+                <option value="cursive">cursive</option>
+                <option value="system-ui">system-ui</option>
+                <option value="Georgia, serif">Georgia</option>
+                <option value="'Courier New', monospace">Courier New</option>
+              </select>
+            </div>
+          </div>
+          <div class="field">
+            <label>Size</label>
+            <div class="slider-combo">
+              <input type="range" min="10" max="60" value="18" data-slider="--scrolling-video-text-font-size" data-unit="px">
+              <input type="text" value="18px" data-var="--scrolling-video-text-font-size">
+            </div>
+          </div>
+          <div class="field">
+            <label>Line height</label>
+            <div class="slider-combo">
+              <input type="range" min="10" max="30" value="15" step="1" data-slider="--scrolling-video-text-line-height" data-unit="em" data-divisor="10">
+              <input type="text" value="1.5em" data-var="--scrolling-video-text-line-height">
+            </div>
+          </div>
+          <div class="field">
+            <label>Color</label>
+            <div class="color-combo">
+              <input type="color" value="#ffffff" data-color-for="--scrolling-video-text-color">
+              <input type="text" value="white" data-var="--scrolling-video-text-color">
+            </div>
+          </div>
+          <div class="field">
+            <label>Background</label>
+            <div class="color-combo">
+              <input type="color" value="#000000" data-color-for="--scrolling-video-text-background">
+              <input type="text" value="rgba(0, 0, 0, 0.7)" data-var="--scrolling-video-text-background">
+            </div>
+          </div>
+          <div class="field">
+            <label>Border</label>
+            <div class="field-input">
+              <input type="text" data-var="--scrolling-video-text-border" value="1px solid #444">
+            </div>
+          </div>
+          <div class="field">
+            <label>Max width</label>
+            <div class="slider-combo">
+              <input type="range" min="100" max="800" value="400" step="10" data-slider="--scrolling-video-text-max-width" data-unit="px">
+              <input type="text" value="400px" data-var="--scrolling-video-text-max-width">
+            </div>
+          </div>
+          <div class="field">
+            <label>Align</label>
+            <div class="field-input">
+              <select data-var="--scrolling-video-text-alignment">
+                <option value="start" selected>Left</option>
+                <option value="center">Center</option>
+                <option value="end">Right</option>
+              </select>
+            </div>
+          </div>
+          <div class="field">
+            <label>Radius</label>
+            <div class="slider-combo">
+              <input type="range" min="0" max="30" value="0" data-slider="--scrolling-video-text-radius" data-unit="px">
+              <input type="text" value="0px" data-var="--scrolling-video-text-radius">
+            </div>
+          </div>
+          <div class="field">
+            <label>Padding</label>
+            <div class="slider-combo">
+              <input type="range" min="0" max="60" value="20" data-slider="--scrolling-video-text-padding" data-unit="px">
+              <input type="text" value="20px" data-var="--scrolling-video-text-padding">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Video display -->
+      <div class="section">
+        <button type="button" class="section-toggle">Video display</button>
+        <div class="section-body">
+          <div class="field">
+            <label>Object fit</label>
+            <div class="field-input">
+              <select data-var="--scrolling-video-object-fit">
+                <option value="cover" selected>Cover</option>
+                <option value="contain">Contain</option>
+                <option value="fill">Fill</option>
+                <option value="none">None</option>
+              </select>
+            </div>
+          </div>
+          <div class="field">
+            <label>Position</label>
+            <div class="field-input">
+              <select data-var="--scrolling-video-object-position">
+                <option value="center" selected>Center</option>
+                <option value="top">Top</option>
+                <option value="bottom">Bottom</option>
+                <option value="left">Left</option>
+                <option value="right">Right</option>
+                <option value="top left">Top left</option>
+                <option value="top right">Top right</option>
+                <option value="bottom left">Bottom left</option>
+                <option value="bottom right">Bottom right</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scroll behavior -->
+      <div class="section">
+        <button type="button" class="section-toggle">Scroll behavior</button>
+        <div class="section-body">
+          <div class="field">
+            <label>px / sec</label>
+            <div class="slider-combo">
+              <input type="range" min="100" max="1500" value="600" step="50" id="pps-range">
+              <input type="text" value="600" id="pps-text">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Debug -->
+      <div class="section">
+        <button type="button" class="section-toggle">Debug</button>
+        <div class="section-body">
+          <div class="check-field">
+            <input type="checkbox" id="debug-toggle" checked>
+            <label for="debug-toggle">Show timestamp overlay</label>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="editor-footer">
+      <button type="button" id="export-btn">Copy HTML</button>
+      <pre id="export-output"></pre>
+    </div>
+  </form>
+
+  <script type="module">
+    import './scrolling-video.js';
+
+    const sv = document.getElementById('sv');
+    const editor = document.getElementById('editor');
+    const overlaysContainer = document.getElementById('overlays');
+    const exportOutput = document.getElementById('export-output');
+
+    // Reset form on load to clear any browser-cached values
+    editor.reset();
+
+    // Prevent form submission
+    editor.addEventListener('submit', (e) => e.preventDefault());
+
+    // Toggle panel
+    document.getElementById('editor-toggle').addEventListener('click', () => {
+      editor.classList.toggle('collapsed');
+    });
+
+    // Collapsible sections
+    document.querySelectorAll('.section-toggle').forEach(btn => {
+      btn.addEventListener('click', () => {
+        btn.closest('.section').classList.toggle('closed');
+      });
+    });
+
+    // Debug toggle
+    const debugToggle = document.getElementById('debug-toggle');
+    debugToggle.checked = true;
+    sv.setDebug(true);
+    debugToggle.addEventListener('change', (e) => {
+      sv.setDebug(e.target.checked);
+    });
+
+    // ── Pixels per second ──
+    const ppsRange = document.getElementById('pps-range');
+    const ppsText = document.getElementById('pps-text');
+
+    function applyPPS(val) {
+      sv.pixelsPerSecond = val;
+      // Recalculate foreground height if video is loaded
+      const video = sv.shadowRoot.querySelector('video');
+      if (video.duration) {
+        const hm = parseFloat(sv.dataset.heightMultiplier) || 1;
+        const height = hm * video.duration * val + window.innerHeight;
+        sv.shadowRoot.querySelector('.foreground').style.setProperty('height', `${height}px`);
+      }
+    }
+
+    ppsRange.addEventListener('input', () => {
+      ppsText.value = ppsRange.value;
+      applyPPS(parseInt(ppsRange.value, 10));
+    });
+    ppsText.addEventListener('input', () => {
+      const num = parseInt(ppsText.value, 10);
+      if (!isNaN(num) && num > 0) {
+        ppsRange.value = Math.min(Math.max(num, 100), 1500);
+        applyPPS(num);
+      }
+    });
+
+    // ── Slider + text combos ──
+    document.querySelectorAll('.slider-combo').forEach(combo => {
+      const range = combo.querySelector('input[type="range"]');
+      const text = combo.querySelector('input[type="text"]');
+      if (!range.dataset.slider) return; // skip pps, handled above
+      const prop = range.dataset.slider;
+      const unit = range.dataset.unit || '';
+      const divisor = parseFloat(range.dataset.divisor) || 1;
+
+      range.addEventListener('input', () => {
+        const val = range.value / divisor;
+        const display = divisor !== 1 ? val.toFixed(1) + unit : val + unit;
+        text.value = display;
+        sv.style.setProperty(prop, display);
+      });
+
+      text.addEventListener('input', () => {
+        sv.style.setProperty(prop, text.value);
+        const num = parseFloat(text.value);
+        if (!isNaN(num)) {
+          range.value = num * divisor;
+        }
+      });
+    });
+
+    // ── Color picker + text combos ──
+    document.querySelectorAll('.color-combo').forEach(combo => {
+      const picker = combo.querySelector('input[type="color"]');
+      const text = combo.querySelector('input[type="text"]');
+      const prop = picker.dataset.colorFor;
+
+      picker.addEventListener('input', () => {
+        text.value = picker.value;
+        sv.style.setProperty(prop, picker.value);
+      });
+
+      text.addEventListener('input', () => {
+        sv.style.setProperty(prop, text.value);
+      });
+    });
+
+    // ── Plain fields (select and text without sliders/colors) ──
+    document.querySelectorAll('#editor [data-var]').forEach(input => {
+      if (input.closest('.slider-combo') || input.closest('.color-combo')) return;
+      input.addEventListener('input', () => {
+        sv.style.setProperty(input.dataset.var, input.value);
+      });
+    });
+
+    // ── Text overlay cards ──
+    function buildOverlayRows() {
+      overlaysContainer.innerHTML = '';
+      sv.querySelectorAll('p').forEach((p) => {
+        addOverlayRow(p.dataset.timestamp || '0:00', p.textContent, p);
+      });
+    }
+
+    function addOverlayRow(timestamp, text, pEl) {
+      const card = document.createElement('div');
+      card.className = 'overlay-card';
+
+      const top = document.createElement('div');
+      top.className = 'overlay-top';
+
+      const tsLabel = document.createElement('span');
+      tsLabel.className = 'ts-label';
+      tsLabel.textContent = 'at';
+
+      const tsInput = document.createElement('input');
+      tsInput.type = 'text';
+      tsInput.value = timestamp;
+      tsInput.placeholder = 'm:ss';
+      tsInput.title = 'Timestamp (m:ss)';
+      tsInput.autocomplete = 'off';
+
+      const delBtn = document.createElement('button');
+      delBtn.type = 'button';
+      delBtn.className = 'overlay-delete';
+      delBtn.textContent = '\u00d7';
+      delBtn.title = 'Remove overlay';
+
+      top.appendChild(tsLabel);
+      top.appendChild(tsInput);
+      top.appendChild(delBtn);
+
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      textArea.placeholder = 'Overlay text ...';
+      textArea.rows = 2;
+      textArea.autocomplete = 'off';
+
+      card.appendChild(top);
+      card.appendChild(textArea);
+      overlaysContainer.appendChild(card);
+
+      if (!pEl) {
+        pEl = document.createElement('p');
+        pEl.dataset.timestamp = timestamp;
+        pEl.textContent = text;
+        sv.appendChild(pEl);
+      }
+
+      card._pEl = pEl;
+
+      tsInput.addEventListener('input', () => {
+        pEl.dataset.timestamp = tsInput.value;
+        repositionOverlay(pEl);
+      });
+
+      textArea.addEventListener('input', () => {
+        pEl.textContent = textArea.value;
+      });
+
+      delBtn.addEventListener('click', () => {
+        pEl.remove();
+        card.remove();
+      });
+    }
+
+    function repositionOverlay(pEl) {
+      const ts = pEl.dataset.timestamp;
+      if (!ts) return;
+      const video = sv.shadowRoot.querySelector('video');
+      if (!video.duration) return;
+
+      let [minutes, seconds] = ts.split(':');
+      minutes = parseInt(minutes, 10) || 0;
+      seconds = parseFloat(seconds) || 0;
+      const totalSeconds = 60 * minutes + seconds;
+      const percentage = Math.round(totalSeconds / video.duration * 10000) / 100;
+      pEl.style.setProperty('top', `${percentage}%`);
+    }
+
+    document.getElementById('add-overlay').addEventListener('click', () => {
+      addOverlayRow('0:00', 'New overlay', null);
+    });
+
+    // ── Export ──
+    const exportBtn = document.getElementById('export-btn');
+    exportBtn.addEventListener('click', () => {
+      const lines = [];
+      const styles = [];
+
+      document.querySelectorAll('#editor [data-var]').forEach(input => {
+        const val = input.value;
+        const prop = input.dataset.var;
+        const dflt = input.defaultValue || input.querySelector?.('option[selected]')?.value;
+        if (val !== dflt) {
+          styles.push(`${prop}: ${val};`);
+        }
+      });
+
+      const attrs = ['src="video.mp4"'];
+      const ppsVal = parseInt(ppsText.value, 10);
+      if (ppsVal && ppsVal !== 600) {
+        attrs.push(`pixels-per-second="${ppsVal}"`);
+      }
+
+      let styleAttr = '';
+      if (styles.length) {
+        attrs.push(`style="${styles.join(' ')}"`);
+      }
+
+      lines.push(`<scrolling-video ${attrs.join(' ')}>`);
+      sv.querySelectorAll('p').forEach(p => {
+        const ts = p.dataset.timestamp || '0:00';
+        const escaped = p.textContent.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        lines.push(`  <p data-timestamp="${ts}">${escaped}</p>`);
+      });
+      lines.push('</scrolling-video>');
+
+      const html = lines.join('\n');
+      exportOutput.textContent = html;
+      exportOutput.style.display = 'block';
+      navigator.clipboard.writeText(html).then(() => {
+        exportBtn.textContent = 'Copied!';
+        exportBtn.classList.add('copied');
+        setTimeout(() => {
+          exportBtn.textContent = 'Copy HTML';
+          exportBtn.classList.remove('copied');
+        }, 1500);
+      }).catch(() => {});
+    });
+
+    // ── Video source ──
+    function loadVideo(src) {
+      const video = sv.shadowRoot.querySelector('video');
+      sv.setAttribute('src', src);
+      video.src = src;
+      sv.isVideoLoaded = false;
+      video.load();
+    }
+
+    document.getElementById('video-upload').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const url = URL.createObjectURL(file);
+      document.getElementById('video-url').value = file.name;
+      loadVideo(url);
+    });
+
+    document.getElementById('video-url').addEventListener('change', (e) => {
+      loadVideo(e.target.value);
+    });
+
+    // Init
+    buildOverlayRows();
+  </script>
+</body>
+</html>

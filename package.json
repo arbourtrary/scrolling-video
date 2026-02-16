@@ -1,0 +1,9 @@
+{
+  "name": "scrolling-video",
+  "version": "1.0.0",
+  "description": "Scroll-driven video web component with timed text overlays",
+  "main": "scrolling-video.js",
+  "files": ["scrolling-video.js"],
+  "keywords": ["web-component", "scroll", "video", "custom-element"],
+  "license": "MIT"
+}
