@@ -45,7 +45,7 @@ scrolling-video {
 
 ## Encoding Videos for Scroll Scrubbing (HandBrake)
 
-Scroll-driven playback seeks to arbitrary positions, so videos need frequent keyframes. Two HandBrake presets are included in `handbrake/`:
+Scroll-driven playback seeks to arbitrary positions, so videos need frequent keyframes. [HandBrake](https://handbrake.fr/) is an open source video transcoder and 2 HandBrake presets are included in `handbrake/`:
 
 | Preset | Keyframe Interval | Quality | Best for |
 |---|---|---|---|
